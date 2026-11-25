@@ -107,7 +107,7 @@ ans <- sw_ni_power(
 ans$power
 
 # Binary
-sw_ni_power(
+ans <- sw_ni_power(
   outcome = "binary", trials = 10000, Tp = 5, no_clusters_per_step = 10, K = 30,
   b1 = 0.5, sdc = 1, sdcp = 0, theta = 0, margin = 0.18,
 )
