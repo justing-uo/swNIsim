@@ -1,6 +1,95 @@
+.max_psock_workers <- function() {
+  # R historically allows 128 connections by default, including stdin,
+  # stdout, and stderr.  Each PSOCK worker consumes a connection.  Keep a
+  # deliberately conservative package-level cap so high-core Linux hosts do
+  # not exhaust the connection table.  The environment variable can lower the
+  # cap for memory-constrained jobs, but cannot raise this safety limit.
+  hard_cap <- 64L
+  configured <- Sys.getenv("SWNISIM_MAX_WORKERS", unset = "")
+  if (nzchar(configured)) {
+    configured <- suppressWarnings(as.integer(configured))
+    if (length(configured) == 1L && !is.na(configured) && configured >= 1L) {
+      hard_cap <- min(hard_cap, configured)
+    }
+  }
+
+  # Leave room for files, graphics devices, and other package connections that
+  # may be opened while a cluster is alive.  This remains conservative on R
+  # sessions started with a larger --max-connections value.
+  n_open <- tryCatch(
+    nrow(showConnections(all = TRUE)),
+    error = function(e) 3L
+  )
+  connection_cap <- max(1L, 128L - as.integer(n_open) - 8L)
+  min(hard_cap, connection_cap)
+}
+
+.scheduler_ncores <- function() {
+  variables <- c(
+    "SLURM_CPUS_PER_TASK",
+    "SLURM_CPUS_ON_NODE",
+    "PBS_NP",
+    "NSLOTS",
+    "LSB_DJOB_NUMPROC"
+  )
+
+  for (variable in variables) {
+    value <- Sys.getenv(variable, unset = "")
+    if (!nzchar(value)) next
+    # Some schedulers append annotations, for example "64(x2)".
+    value <- sub("^\\s*([0-9]+).*$", "\\1", value)
+    value <- suppressWarnings(as.integer(value))
+    if (length(value) == 1L && !is.na(value) && value >= 1L) return(value)
+  }
+
+  NA_integer_
+}
+
+.detected_ncores <- function() {
+  n <- .scheduler_ncores()
+  if (is.na(n)) {
+    n <- suppressWarnings(parallel::detectCores(logical = FALSE))
+  }
+  if (length(n) != 1L || is.na(n) || n < 1L) {
+    n <- suppressWarnings(parallel::detectCores(logical = TRUE))
+  }
+  if (length(n) != 1L || is.na(n) || n < 1L) 1L else as.integer(n)
+}
+
+.safe_ncores <- function(ncores, tasks = Inf, warn = TRUE) {
+  requested <- as.integer(ncores)
+  task_limit <- if (is.finite(tasks)) max(1L, as.integer(tasks)) else requested
+  safety_limit <- .max_psock_workers()
+  workers <- max(1L, min(requested, task_limit, safety_limit))
+
+  if (isTRUE(warn) && requested > safety_limit && task_limit > safety_limit) {
+    warning(
+      "ncores was reduced from ", requested, " to ", workers,
+      " to avoid exhausting R's socket connections. ",
+      "Set SWNISIM_MAX_WORKERS to a smaller value if the server has tighter limits.",
+      call. = FALSE
+    )
+  }
+
+  workers
+}
+
 .default_ncores <- function() {
-  n <- suppressWarnings(parallel::detectCores())
-  if (length(n) != 1L || is.na(n) || n < 2L) 1L else as.integer(n - 1L)
+  n <- .detected_ncores()
+  requested <- if (n > 1L) n - 1L else 1L
+  .safe_ncores(requested, warn = FALSE)
+}
+
+.validate_cluster <- function(cluster) {
+  if (!inherits(cluster, "cluster") || length(cluster) < 1L) {
+    stop("cluster must be a non-empty object created by parallel::makeCluster().", call. = FALSE)
+  }
+  invisible(cluster)
+}
+
+.stop_cluster <- function(cluster) {
+  try(parallel::stopCluster(cluster), silent = TRUE)
+  invisible(NULL)
 }
 
 .default_margin <- function(outcome) {
@@ -222,15 +311,21 @@
   fit_cp
 }
 
-.correlation_summary <- function(outcome, sdc, sdcp, sdw) {
+.correlation_summary <- function(outcome, sdc, sdcp, sdw, rho = 0) {
   s2 <- if (identical(outcome, "binary")) pi^2 / 3 else sdw^2
   total <- sdc^2 + sdcp^2 + s2
   cluster_var <- sdc^2 + sdcp^2
-  list(
+  ar1 <- sdcp > 0 && rho != 0
+  out <- list(
     scale = if (identical(outcome, "binary")) "latent logistic" else "outcome",
-    structure = if (sdcp > 0) "nested exchangeable" else "exchangeable",
+    structure = if (ar1) "AR(1) cluster-by-period" else if (sdcp > 0) "nested exchangeable" else "exchangeable",
     within_period_icc = cluster_var / total,
-    between_period_icc = sdc^2 / total,
-    cluster_autocorrelation = if (cluster_var > 0) sdc^2 / cluster_var else NA_real_
+    between_period_icc = (sdc^2 + rho * sdcp^2) / total,
+    cluster_autocorrelation = if (cluster_var > 0) (sdc^2 + rho * sdcp^2) / cluster_var else NA_real_
   )
+  if (ar1) {
+    out$rho <- rho
+    out$note <- "Between-period values are for adjacent periods; at lag d, rho^d replaces rho."
+  }
+  out
 }

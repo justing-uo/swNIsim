@@ -18,12 +18,12 @@ sw_ni_sample_size(
 \arguments{
 \item{target_power}{Target power, strictly between 0 and 1.}
 
-\item{search}{\code{"K"} to search over the common cluster-period size, or
-\code{"clusters"} to search over the number of clusters per sequence (a
+\item{search}{`"K"` to search over the common cluster-period size, or
+`"clusters"` to search over the number of clusters per sequence (a
 balanced allocation).}
 
 \item{lower, upper}{Integer bounds for the bisection search. Defaults are
-2 and 200 for \code{"K"}, and 1 and 50 for \code{"clusters"}. Ignored when \code{values}
+2 and 200 for `"K"`, and 1 and 50 for `"clusters"`. Ignored when `values`
 is supplied.}
 
 \item{values}{Optional vector of positive integers to evaluate in full
@@ -33,37 +33,37 @@ instead of bisecting.}
 
 \item{trials}{Number of simulated trials per candidate.}
 
-\item{...}{Other arguments to \code{\link[=sw_ni_power]{sw_ni_power()}}, such as \code{outcome}, \code{Tp}, \code{K}
-or \code{no_clusters_per_step} (whichever is not searched), \code{mu}, \code{sdw}, \code{sdc},
-\code{b1}, \code{theta} and \code{margin}. Do not supply the searched quantity, \code{seed},
-\code{trials} or \code{return_details}. When searching over clusters, \code{K} must be a
+\item{...}{Other arguments to [sw_ni_power()], such as `outcome`, `Tp`, `K`
+or `no_clusters_per_step` (whichever is not searched), `mu`, `sdw`, `sdc`,
+`b1`, `theta` and `margin`. Do not supply the searched quantity, `seed`,
+`trials` or `return_details`. When searching over clusters, `K` must be a
 single number.}
 }
 \value{
-An object of class \code{sw_ni_sample_size}: a list with the smallest
-value meeting the target (\code{value}, or \code{NA} if none does), its estimated
-\code{power} and \code{mcse}, \code{reached}, \code{near_target}, \code{monotone} (whether the
-evaluated power never falls below the target above the solution),
-\code{search}, \code{target_power}, \code{trials}, \code{seed}, and \code{evaluated}, a data frame
-of every candidate simulated.
+An object of class `sw_ni_sample_size`: a list with the smallest
+  value meeting the target (`value`, or `NA` if none does), its estimated
+  `power` and `mcse`, `reached`, `near_target`, `monotone` (whether the
+  evaluated power never falls below the target above the solution),
+  `search`, `target_power`, `trials`, `seed`, and `evaluated`, a data frame
+  of every candidate simulated.
 }
 \description{
-Searches over the common cluster-period size \code{K}, or over the number of
+Searches over the common cluster-period size `K`, or over the number of
 clusters per crossover sequence, for the smallest value whose simulated
-power reaches \code{target_power}. All other design and model settings are passed
-unchanged to \code{\link[=sw_ni_power]{sw_ni_power()}}.
+power reaches `target_power`. All other design and model settings are passed
+unchanged to [sw_ni_power()].
 }
 \details{
-By default the search is a bisection between \code{lower} and \code{upper}, which
+By default the search is a bisection between `lower` and `upper`, which
 assumes that power increases with the searched quantity. It evaluates about
-\code{log2(upper - lower) + 2} candidates. Supply \code{values} instead to evaluate
+`log2(upper - lower) + 2` candidates. Supply `values` instead to evaluate
 every listed candidate, which also gives the power curve.
 
-Every candidate uses the same \code{seed} and \code{trials}. Because power is
+Every candidate uses the same `seed` and `trials`. Because power is
 estimated, a candidate whose estimate lies within two Monte Carlo SEs of the
 target could fall on either side of it; the result then sets
-\code{near_target = TRUE}, and the answer should be confirmed with more \code{trials}
-(for example by calling \code{\link[=sw_ni_power]{sw_ni_power()}} for the solution and the value just
+`near_target = TRUE`, and the answer should be confirmed with more `trials`
+(for example by calling [sw_ni_power()] for the solution and the value just
 below it).
 }
 \examples{

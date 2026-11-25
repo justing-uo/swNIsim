@@ -13,23 +13,23 @@ sw_ni_design(
 }
 \arguments{
 \item{Tp}{Number of time periods. Must be an integer >= 2. The design has
-\code{Tp - 1} crossover sequences.}
+`Tp - 1` crossover sequences.}
 
 \item{no_clusters_per_step}{Backward-compatible cluster-count argument. It
 may be one positive integer for a balanced design or a vector of length
-\code{Tp - 1} for unequal numbers of clusters across sequences.}
+`Tp - 1` for unequal numbers of clusters across sequences.}
 
 \item{clusters_per_sequence}{Optional positive integer vector of length
-\code{Tp - 1}. When supplied, it takes precedence over
-\code{no_clusters_per_step}.}
+`Tp - 1`. When supplied, it takes precedence over
+`no_clusters_per_step`.}
 
-\item{delay}{Optional numeric vector with length \code{Tp - 1}. Element \code{r}
-specifies the treatment-exposure value at the \code{r}th post-crossover period.
-If \code{NULL}, every post-crossover period has exposure value 1.}
+\item{delay}{Optional numeric vector with length `Tp - 1`. Element `r`
+specifies the treatment-exposure value at the `r`th post-crossover period.
+If `NULL`, every post-crossover period has exposure value 1.}
 }
 \value{
-An object of class \code{sw_ni_design} containing the cluster-period data,
-number of clusters, number of cluster-period cells, and sequence sizes.
+An object of class `sw_ni_design` containing the cluster-period data,
+  number of clusters, number of cluster-period cells, and sequence sizes.
 }
 \description{
 Builds the repeated cross-sectional cluster-by-period design used by the

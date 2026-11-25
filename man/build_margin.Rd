@@ -19,10 +19,10 @@ build_margin(
 )
 }
 \arguments{
-\item{outcome}{Either \code{"binary"} or \code{"continuous"}.}
+\item{outcome}{Either `"binary"` or `"continuous"`.}
 
-\item{method}{Conversion route: \code{"preserve_control"}, \code{"preserve_benefit"},
-\code{"threshold"} or \code{"direct"}. Required.}
+\item{method}{Conversion route: `"preserve_control"`, `"preserve_benefit"`,
+`"threshold"` or `"direct"`. Required.}
 
 \item{p1}{Binary: control (reference) success probability, strictly between
 0 and 1, on the cluster-conditional scale.}
@@ -30,66 +30,66 @@ build_margin(
 \item{mu}{Continuous: control (reference) mean.}
 
 \item{f1}{Preserved fraction of the control response level, strictly
-between 0 and 1. Used only by \code{"preserve_control"}.}
+between 0 and 1. Used only by `"preserve_control"`.}
 
 \item{p0}{Binary: benchmark (for example placebo) success probability,
-at least 0 and below \code{p1}. Used only by \code{"preserve_benefit"}.}
+at least 0 and below `p1`. Used only by `"preserve_benefit"`.}
 
-\item{mu0}{Continuous: benchmark (for example placebo) mean, below \code{mu}.
-Used only by \code{"preserve_benefit"}.}
+\item{mu0}{Continuous: benchmark (for example placebo) mean, below `mu`.
+Used only by `"preserve_benefit"`.}
 
 \item{f2}{Preserved fraction of the control's benefit over the benchmark,
-strictly between 0 and 1. Used only by \code{"preserve_benefit"}.}
+strictly between 0 and 1. Used only by `"preserve_benefit"`.}
 
 \item{p_min}{Binary: minimum acceptable success probability, strictly
-between 0 and \code{p1}. Used only by \code{"threshold"}.}
+between 0 and `p1`. Used only by `"threshold"`.}
 
-\item{mu_min}{Continuous: minimum acceptable mean, below \code{mu}. Used only by
-\code{"threshold"}.}
+\item{mu_min}{Continuous: minimum acceptable mean, below `mu`. Used only by
+`"threshold"`.}
 
 \item{margin}{A positive margin already on the model scale. Used only by
-\code{"direct"}.}
+`"direct"`.}
 }
 \value{
-A list with elements \code{margin} (on the model scale), \code{b1} (binary
-reference log odds, or \code{NULL}), \code{mu} (continuous reference mean, or
-\code{NULL}), \code{outcome}, \code{method}, \code{reference} (the control value), and
-\code{minimum_acceptable} (the threshold implied on the outcome scale, or \code{NA}
-for \code{"direct"}).
+A list with elements `margin` (on the model scale), `b1` (binary
+  reference log odds, or `NULL`), `mu` (continuous reference mean, or
+  `NULL`), `outcome`, `method`, `reference` (the control value), and
+  `minimum_acceptable` (the threshold implied on the outcome scale, or `NA`
+  for `"direct"`).
 }
 \description{
 Translates a clinically specified non-inferiority threshold into the margin
-used by \code{\link[=sw_ni_power]{sw_ni_power()}}: a mean difference for continuous outcomes, or a
+used by [sw_ni_power()]: a mean difference for continuous outcomes, or a
 log odds ratio for binary outcomes. Outcomes are oriented so that larger
 values are favourable.
 }
 \details{
-The conversion route must be chosen explicitly with \code{method}, and only the
+The conversion route must be chosen explicitly with `method`, and only the
 inputs that route uses may be supplied. There are no default reference
 values or preserved fractions.
 
 \describe{
-\item{\code{"preserve_control"}}{The intervention must retain at least a
-fraction \code{f1} of the control response level: the minimum acceptable
-value is \code{f1 * p1} (binary) or \code{f1 * mu} (continuous). For continuous
-outcomes this is meaningful only on a scale with a true zero, so \code{mu}
-must be positive.}
-\item{\code{"preserve_benefit"}}{The intervention must retain at least a
-fraction \code{f2} of the control's established benefit over a benchmark
-such as placebo: the minimum acceptable value is \code{p0 + f2 * (p1 - p0)}
-or \code{mu0 + f2 * (mu - mu0)}. Justifying this choice requires relevant
-historical evidence for the benchmark.}
-\item{\code{"threshold"}}{The minimum acceptable value is given directly as
-\code{p_min} (binary) or \code{mu_min} (continuous).}
-\item{\code{"direct"}}{The margin is already on the model scale and is
-supplied as \code{margin}. For binary outcomes \code{p1} may also be given so that
-the reference log odds \code{b1} is returned.}
+  \item{`"preserve_control"`}{The intervention must retain at least a
+    fraction `f1` of the control response level: the minimum acceptable
+    value is `f1 * p1` (binary) or `f1 * mu` (continuous). For continuous
+    outcomes this is meaningful only on a scale with a true zero, so `mu`
+    must be positive.}
+  \item{`"preserve_benefit"`}{The intervention must retain at least a
+    fraction `f2` of the control's established benefit over a benchmark
+    such as placebo: the minimum acceptable value is `p0 + f2 * (p1 - p0)`
+    or `mu0 + f2 * (mu - mu0)`. Justifying this choice requires relevant
+    historical evidence for the benchmark.}
+  \item{`"threshold"`}{The minimum acceptable value is given directly as
+    `p_min` (binary) or `mu_min` (continuous).}
+  \item{`"direct"`}{The margin is already on the model scale and is
+    supplied as `margin`. For binary outcomes `p1` may also be given so that
+    the reference log odds `b1` is returned.}
 }
 
-For binary outcomes, \code{p1} and the minimum acceptable probability are
+For binary outcomes, `p1` and the minimum acceptable probability are
 cluster-conditional probabilities (for a cluster whose random intercept is
 zero), and the resulting margin is a cluster-conditional log odds ratio,
-\code{qlogis(p1) - qlogis(p_min)}. This conversion needs no variance component,
+`qlogis(p1) - qlogis(p_min)`. This conversion needs no variance component,
 but the result is not a population-average risk-difference margin.
 Translating a population-average target to the conditional scale would also
 require the between-cluster variance.

@@ -1,6 +1,15 @@
-# swNIsim 1.2
+# swNIsim 1.3
 
 `swNIsim` estimates power for non-inferiority tests in repeated cross-sectional stepped-wedge cluster randomized trials with binary or continuous outcomes.
+
+## What changed in 1.3
+
+Version 1.3 combines the 1.2 line with the 0.3.0 GPU edition, which was developed in parallel:
+
+- **GPU and batched CPU acceleration.** A PyTorch engine runs tens of thousands of replicates at once on a CUDA/MPS GPU or CPU. `backend`, `batch_size` and `device` choose and tune it; `sw_ni_gpu_status()` reports what was found. It runs on Google Colab without compiling `lme4`.
+- **AR(1) cluster-by-period effects.** `rho` sets the autocorrelation of the cluster-by-period effect across periods, so the between-period correlation decays with distance. `rho = 0` (default) is the 1.2 nested exchangeable structure.
+- Everything from 1.1 and 1.2 is kept: `build_margin()`, `sw_ni_sample_size()`, `fit_cp`, `nAGQ` and nested exchangeable correlation.
+- Use `backend = "lme4"` to reproduce 1.2 results seed-for-seed. See [Choosing a simulation backend](#choosing-a-simulation-backend).
 
 ## What changed in 1.2
 
@@ -15,15 +24,61 @@
 - Binary analyses accept an `nAGQ` argument; the default (0) is unchanged.
 - `adjust_period = FALSE` now gives a warning.
 
-The package supports exchangeable and nested exchangeable correlation for repeated cross-sectional designs. It does not yet model exponential decay of the between-period correlation, closed-cohort individual effects, missing outcomes, cluster dropout, or heterogeneous treatment effects.
+The package supports exchangeable, nested exchangeable and AR(1) cluster-by-period correlation for repeated cross-sectional designs. It does not yet model closed-cohort individual effects, missing outcomes, cluster dropout, or heterogeneous treatment effects.
 
 ## Installation
 
 ```r
-install.packages("lme4")
-install.packages("swNIsim_1.2.tar.gz", repos = NULL, type = "source")
+install.packages("lme4")          # CPU reference engine
+install.packages("swNIsim_1.3.tar.gz", repos = NULL, type = "source")
 library(swNIsim)
 ```
+
+For GPU or batched CPU acceleration, install Python (>= 3.9) with `torch`; `reticulate` is optional and makes the calls in-process. Set `Sys.setenv(SWNISIM_PYTHON = "/path/to/python3")` to pick a specific interpreter. Check what was found with:
+
+```r
+sw_ni_gpu_status()
+```
+
+## Choosing a simulation backend
+
+`sw_ni_power()`, `sw_ni_grid()` and `sw_ni_sample_size()` accept `backend`:
+
+- `"auto"` *(default)*: PyTorch on a GPU (`cuda` / `mps`) if available, else batched PyTorch on CPU, else `lme4`. Settings only `lme4` supports (`nAGQ != 0`, an explicit `fit_cp`, or nested exchangeable correlation, `sdcp > 0` with `rho = 0`) always use `lme4`.
+- `"gpu"`: PyTorch on a GPU; errors if none is found.
+- `"torch_cpu"`: batched PyTorch on CPU.
+- `"lme4"`: the per-trial `lme4::lmer` / `lme4::glmer` reference engine. Use it to reproduce results from 1.2 and earlier seed-for-seed.
+
+The engines fit the same models but draw random numbers differently, so the same seed gives slightly different power estimates on each. `batch_size` (e.g. `10000L`) controls peak GPU memory.
+
+| Setting | `lme4` | PyTorch |
+|---|---|---|
+| Exchangeable (`sdcp = 0`) | yes | yes |
+| Nested exchangeable (`sdcp > 0`, `rho = 0`) | yes (default under `"auto"`) | fitted as AR(1) |
+| AR(1) (`sdcp > 0`, `rho != 0`) | no | yes, equal `K` only |
+| `fit_cp`, `nAGQ != 0` | yes | no |
+| Unequal `K` | yes | yes (`sdcp = 0`) |
+
+## Google Colab quickstart
+
+Choose `Runtime -> Change runtime type -> R` and a GPU (e.g. T4). Upload the tarball to the session's files pane, then run:
+
+```r
+install.packages("swNIsim_1.3.tar.gz", repos = NULL, type = "source")
+library(swNIsim)
+sw_ni_gpu_status()
+
+ans <- sw_ni_power(
+  outcome = "continuous", trials = 100000,
+  Tp = 9, no_clusters_per_step = 2, K = 5,
+  mu = 21, sdw = 10, sdc = 4.2, margin = 4.2,
+  backend = "gpu", return_details = TRUE
+)
+ans$power
+ans$device
+```
+
+In a Python runtime, `!R CMD INSTALL swNIsim_1.3.tar.gz` installs it, and `%load_ext rpy2.ipython` followed by `%%R` cells runs R code. A longer script is in [`inst/colab/colab_quickstart.R`](inst/colab/colab_quickstart.R).
 
 ## Converting a clinical margin
 
@@ -61,6 +116,19 @@ sw_ni_power(
 ```
 
 The within-period ICC is `(sdc^2 + sdcp^2) / (sdc^2 + sdcp^2 + s2)` and the between-period ICC is `sdc^2 / (sdc^2 + sdcp^2 + s2)`, where `s2` is `sdw^2` for continuous outcomes and `pi^2 / 3` on the latent logistic scale for binary outcomes.
+
+## AR(1) cluster-by-period effects
+
+With `rho != 0`, the cluster-by-period effects follow a stationary AR(1) process, so the correlation between two periods in the same cluster decays with the distance between them. These designs run on PyTorch, which fits the AR(1) model (`glmmTMB`-style; Laplace approximation for binary outcomes). Cluster-period sizes must be equal.
+
+```r
+ans <- sw_ni_power(
+  outcome = "continuous", trials = 10000, Tp = 7, no_clusters_per_step = 4, K = 20,
+  mu = 5, sdw = 2, sdc = 0.7, sdcp = 0.7, rho = 0.6, theta = 0, margin = 0.15,
+  backend = "auto", return_details = TRUE
+)
+ans$correlation  # adjacent-period values; at lag d, rho^d replaces rho
+```
 
 ## Finding the smallest design that meets a power target
 
@@ -114,14 +182,14 @@ Rscript swNIsim_worked_examples_v1.0.R          # 100,000 trials per candidate
 Rscript swNIsim_worked_examples_v1.0.R 10000    # quicker pilot run
 ```
 
-The script reproduces the manuscript's numbers and checks that swNIsim 1.0 is installed. Version 1.2 gives the same results for the same seed when `sdcp = 0`. A single example can also be run directly in 1.2:
+The script checks that swNIsim 1.0 is installed, since that version produced the manuscript's numbers. With `backend = "lme4"`, 1.3 uses the same seed sequence and gives matching estimates; exact rejection counts can differ by a few in 100,000 across `lme4` versions (e.g. 91,633 vs. 91,639 for TheraPPP overall, K = 5). A single example can also be run directly in 1.3:
 
 ```r
 sw_ni_power(
   outcome = "continuous", seed = 20261111, trials = 100000,
   Tp = 9, no_clusters_per_step = 2, K = 5,
   mu = 21, sdw = 10, sdc = 4.2, theta = 0, margin = 4.2,
-  sig.level = 0.025
+  sig.level = 0.025, backend = "lme4"
 )  # TheraPPP overall, 0.916
 ```
 
@@ -245,7 +313,15 @@ lme4::glmer(
 )
 ```
 
-`nAGQ = 0` is the default; set `nAGQ = 1` in `sw_ni_power()` for the Laplace approximation.
+`nAGQ = 0` is the default; set `nAGQ = 1` in `sw_ni_power()` for the Laplace approximation. The PyTorch engine solves the same models in batches (`float64`, `nAGQ = 0` for binary outcomes).
+
+With AR(1) cluster-by-period effects (`rho != 0`), the PyTorch engine fits
+
+```r
+glmmTMB::glmmTMB(y ~ period + delayed_tx + (1 | cluster) + ar1(period + 0 | cluster), ...)
+```
+
+with REML or ML for continuous outcomes and the Laplace approximation for binary outcomes.
 
 The one-sided non-inferiority test rejects when
 

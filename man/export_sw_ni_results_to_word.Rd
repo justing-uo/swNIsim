@@ -11,16 +11,16 @@ export_sw_ni_results_to_word(
 )
 }
 \arguments{
-\item{results}{A data frame of simulation results, usually from \code{\link[=sw_ni_grid]{sw_ni_grid()}}.}
+\item{results}{A data frame of simulation results, usually from [sw_ni_grid()].}
 
-\item{target}{Output \code{.docx} path.}
+\item{target}{Output `.docx` path.}
 
 \item{title}{Document title.}
 }
 \value{
-Invisibly returns \code{target}.
+Invisibly returns `target`.
 }
 \description{
-Writes a power-simulation results table to a \code{.docx} file using \code{officer} and
-\code{flextable}.
+Writes a power-simulation results table to a `.docx` file using `officer` and
+`flextable`.
 }

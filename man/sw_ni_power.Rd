@@ -29,11 +29,16 @@ sw_ni_power(
   failure_handling = c("nonrejection", "exclude", "error"),
   parallel = FALSE,
   ncores = .default_ncores(),
-  return_details = FALSE
+  return_details = FALSE,
+  cluster = NULL,
+  backend = c("auto", "gpu", "torch_cpu", "lme4"),
+  batch_size = NULL,
+  device = NULL,
+  rho = 0
 )
 }
 \arguments{
-\item{outcome}{Either \code{"binary"} or \code{"continuous"}.}
+\item{outcome}{Either `"binary"` or `"continuous"`.}
 
 \item{seed}{Random-number seed.}
 
@@ -42,53 +47,53 @@ sw_ni_power(
 \item{Tp}{Number of time periods.}
 
 \item{no_clusters_per_step}{One positive integer for a balanced design, or a
-vector of length \code{Tp - 1} for unequal numbers of clusters per sequence.}
+vector of length `Tp - 1` for unequal numbers of clusters per sequence.}
 
 \item{clusters_per_sequence}{Optional positive integer vector of length
-\code{Tp - 1}; takes precedence over \code{no_clusters_per_step}.}
+`Tp - 1`; takes precedence over `no_clusters_per_step`.}
 
-\item{K}{Cluster-period sample size. May be a scalar, a vector of length \code{I}
-(one value per cluster), a vector of length \code{n_cells} (one value per
-cluster-period in design order), or an \code{I} by \code{Tp} matrix.}
+\item{K}{Cluster-period sample size. May be a scalar, a vector of length `I`
+(one value per cluster), a vector of length `n_cells` (one value per
+cluster-period in design order), or an `I` by `Tp` matrix.}
 
 \item{b1}{Binary-outcome baseline log-odds intercept.}
 
 \item{mu}{Continuous-outcome baseline mean.}
 
 \item{sdw}{Continuous-outcome within-cluster individual-level standard
-deviation. Cluster-period means are generated with SD \code{sdw / sqrt(K_ij)}.}
+deviation. Cluster-period means are generated with SD `sdw / sqrt(K_ij)`.}
 
 \item{sdc}{Cluster-level random-intercept standard deviation.}
 
-\item{sdcp}{Standard deviation of an independent cluster-by-period random
-effect in the data-generating model. The default \code{0} gives the
-exchangeable (Hussey-Hughes) structure; a positive value gives the nested
-exchangeable structure, in which the correlation between two individuals
-in the same cluster is higher within a period than between periods. See
+\item{sdcp}{Standard deviation of the cluster-by-period random effect in the
+data-generating model. The default `0` gives the exchangeable
+(Hussey-Hughes) structure. A positive value with `rho = 0` gives the nested
+exchangeable structure, in which the correlation between two individuals in
+the same cluster is higher within a period than between periods. See
 Details.}
 
 \item{theta}{True treatment effect on the fitted-model scale.}
 
-\item{margin}{Non-inferiority margin on the fitted-model scale. If \code{NULL},
+\item{margin}{Non-inferiority margin on the fitted-model scale. If `NULL`,
 defaults to 0.25 for binary outcomes and 0.15 for continuous outcomes.}
 
-\item{delay}{Optional numeric vector of length \code{Tp - 1} defining treatment
+\item{delay}{Optional numeric vector of length `Tp - 1` defining treatment
 exposure by post-crossover period.}
 
 \item{period_effects}{Optional secular effects on the outcome-model scale.
-Supply length \code{Tp}, or length \code{Tp - 1} with period 1 treated as the zero
+Supply length `Tp`, or length `Tp - 1` with period 1 treated as the zero
 reference. Defaults to zero in all periods.}
 
 \item{adjust_period}{Logical; include categorical period fixed effects in the
-fitted analysis model. The default is \code{TRUE}. Setting \code{FALSE} gives a
+fitted analysis model. The default is `TRUE`. Setting `FALSE` gives a
 warning: in a stepped-wedge trial, exposure is confounded with calendar
 time, so omitting period effects can attribute secular trends to the
 intervention. It is provided only to illustrate that consequence.}
 
 \item{fit_cp}{Binary outcomes only: include a cluster-by-period random
-effect, \code{(1 | cluster:period)}, in the fitted model. The default \code{NULL}
-includes it when \code{sdcp > 0}, so the analysis matches the data-generating
-model. Set \code{FALSE} with \code{sdcp > 0} to evaluate an analysis that wrongly
+effect, `(1 | cluster:period)`, in the fitted model. The default `NULL`
+includes it when `sdcp > 0`, so the analysis matches the data-generating
+model. Set `FALSE` with `sdcp > 0` to evaluate an analysis that wrongly
 assumes exchangeable correlation. Not used for continuous outcomes, whose
 cluster-period-mean analysis absorbs the cluster-by-period effect in its
 residual variance.}
@@ -98,50 +103,89 @@ residual variance.}
 \item{REML}{Use REML for the continuous-outcome LMM.}
 
 \item{nAGQ}{Binary outcomes only: number of adaptive Gauss-Hermite
-quadrature points passed to \code{\link[lme4:glmer]{lme4::glmer()}}. The default \code{0} estimates the
+quadrature points passed to [lme4::glmer()]. The default `0` estimates the
 fixed effects within the penalized iteratively reweighted least squares
 step, which is fast and is the setting used for the published results.
-\code{1} gives the Laplace approximation; values up to 25 request adaptive
+`1` gives the Laplace approximation; values up to 25 request adaptive
 Gauss-Hermite quadrature. Ignored for continuous outcomes.}
 
-\item{failure_handling}{Handling of failed model fits: \code{"nonrejection"}
-counts failures as non-rejections (default), \code{"exclude"} omits them from
-the power denominator, and \code{"error"} stops if any fit fails.}
+\item{failure_handling}{Handling of failed model fits: `"nonrejection"`
+counts failures as non-rejections (default), `"exclude"` omits them from
+the power denominator, and `"error"` stops if any fit fails.}
 
-\item{parallel}{Logical; parallelize simulation replicates within the
-scenario.}
+\item{parallel}{Logical; parallelize simulation replicates across CPU workers
+when using `backend = "lme4"`.}
 
-\item{ncores}{Number of workers when \code{parallel = TRUE}.}
+\item{ncores}{Number of CPU workers when `parallel = TRUE` and
+`backend = "lme4"`.}
 
-\item{return_details}{If \code{TRUE}, return power, Monte Carlo SE, fit-failure
-information, design totals, and normalized parameters.}
+\item{return_details}{If `TRUE`, return power, Monte Carlo SE, fit-failure
+information, backend/device metadata, design totals, and normalized
+parameters.}
+
+\item{cluster}{Optional existing cluster created by [parallel::makeCluster()].
+When supplied (with `backend = "auto"` or `"lme4"`), it takes precedence
+over `parallel` and `ncores`, and is not stopped by `sw_ni_power()`.}
+
+\item{backend}{Simulation engine: `"auto"` (default; uses PyTorch GPU if
+available, else batched PyTorch CPU if available, else `"lme4"`), `"gpu"`
+(requires CUDA/MPS GPU via PyTorch), `"torch_cpu"` (batched PyTorch on
+CPU), or `"lme4"` (reference per-trial CPU fits via `lme4`).}
+
+\item{batch_size}{Optional positive integer number of replicates processed
+simultaneously per batch on `"gpu"` / `"torch_cpu"` backends. Defaults to
+an automatic memory-safe batch size (`NULL`).}
+
+\item{device}{Optional explicit PyTorch device string (for example `"cuda"`,
+`"cuda:0"`, `"mps"`, or `"cpu"`).}
+
+\item{rho}{Autocorrelation in `(-1, 1)` of the cluster-by-period random effect
+across consecutive periods (stationary AR(1)); used only when `sdcp > 0`.
+`rho = 0` (default) gives independent cluster-period effects, i.e. nested
+exchangeable correlation. A non-zero `rho` requires a PyTorch backend.}
 }
 \value{
-Numeric power when \code{return_details = FALSE}; otherwise a list.
+Numeric power when `return_details = FALSE`; otherwise a list.
 }
 \description{
 Main user-facing function for binary and continuous repeated
-cross-sectional stepped-wedge designs. Version 1.2 supports fixed
-categorical period adjustment, user-specified secular period effects,
-unequal sequence sizes, and unequal cluster-period sample sizes.
+cross-sectional stepped-wedge designs. Version 1.3 combines the `lme4`
+reference engine (exchangeable and nested exchangeable correlation, margin
+conversion, sample-size search) with batched PyTorch GPU/CPU acceleration and
+AR(1) cluster-by-period random effects. It supports fixed categorical period
+adjustment, user-specified secular period effects, unequal sequence sizes,
+and unequal cluster-period sample sizes.
 }
 \details{
-With \code{sdcp > 0}, the cluster-period mean (continuous) or linear predictor
+With `sdcp > 0`, the cluster-period mean (continuous) or linear predictor
 (binary) includes a random effect for each cluster-period in addition to the
-cluster random intercept. Writing \code{s2} for the individual-level variance
-(\code{sdw^2} for continuous outcomes, \code{pi^2 / 3} on the latent logistic scale for
+cluster random intercept. Writing `s2` for the individual-level variance
+(`sdw^2` for continuous outcomes, `pi^2 / 3` on the latent logistic scale for
 binary outcomes), the within-period ICC is
-\code{(sdc^2 + sdcp^2) / (sdc^2 + sdcp^2 + s2)}, the between-period ICC is
-\code{sdc^2 / (sdc^2 + sdcp^2 + s2)}, and the cluster autocorrelation is their
-ratio, \code{sdc^2 / (sdc^2 + sdcp^2)}. These are returned in \code{correlation} when
-\code{return_details = TRUE}.
+`(sdc^2 + sdcp^2) / (sdc^2 + sdcp^2 + s2)`, the between-period ICC is
+`sdc^2 / (sdc^2 + sdcp^2 + s2)`, and the cluster autocorrelation is their
+ratio, `sdc^2 / (sdc^2 + sdcp^2)`. These are returned in `correlation` when
+`return_details = TRUE`.
 
 For continuous outcomes the fitted model is unchanged: with a common
 cluster-period size, the analysis of cluster-period means estimates
-\code{sdcp^2 + sdw^2 / K} as its residual variance, so it remains correctly
+`sdcp^2 + sdw^2 / K` as its residual variance, so it remains correctly
 specified under the nested exchangeable structure. With unequal
-cluster-period sizes and \code{sdcp > 0}, the precision weights \code{K_ij} no longer
+cluster-period sizes and `sdcp > 0`, the precision weights `K_ij` no longer
 match the variances of the cluster-period means, and a warning is given.
 
-Exponential decay of the between-period correlation is not implemented.
+With `rho != 0`, the cluster-by-period effects follow a stationary AR(1)
+process across periods, so the between-period correlation decays with the
+distance between periods. These designs run on the PyTorch engine, which fits
+the correctly specified AR(1) model (`glmmTMB`-style, Laplace approximation
+for binary outcomes) and requires equal cluster-period sizes.
 }
+\section{Backends}{
+
+`backend = "auto"` uses PyTorch when it is available, except when a setting
+only the `lme4` engine supports is requested: `nAGQ != 0`, an explicit
+`fit_cp`, or nested exchangeable correlation (`sdcp > 0` with `rho = 0`),
+which `lme4` analyses exactly as in version 1.2. Use `backend = "lme4"` to
+reproduce results from version 1.2 and earlier seed-for-seed.
+}
+

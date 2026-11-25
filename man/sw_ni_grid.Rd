@@ -18,6 +18,7 @@ sw_ni_grid(
   sdw = 2,
   sdc = 1,
   sdcp = 0,
+  rho = 0,
   theta = 0,
   margin = NULL,
   delay = NULL,
@@ -30,35 +31,56 @@ sw_ni_grid(
   failure_handling = "nonrejection",
   parallel = TRUE,
   ncores = .default_ncores(),
-  return_details = TRUE
+  return_details = TRUE,
+  cluster = NULL,
+  backend = c("auto", "gpu", "torch_cpu", "lme4"),
+  batch_size = NULL,
+  device = NULL
 )
 }
 \arguments{
-\item{params}{A data frame, typically from \code{\link[=build_sw_ni_grid]{build_sw_ni_grid()}}. Mixed outcome
+\item{params}{A data frame, typically from [build_sw_ni_grid()]. Mixed outcome
 grids are not supported.}
 
-\item{outcome}{Either \code{"binary"} or \code{"continuous"} unless \code{params$outcome}
+\item{outcome}{Either `"binary"` or `"continuous"` unless `params$outcome`
 is present.}
 
-\item{seed}{Base seed; row \code{i} uses \code{seed + i - 1}.}
+\item{seed}{Base seed; row `i` uses `seed + i - 1`.}
 
 \item{trials}{Number of simulated trials per scenario.}
 
-\item{Tp, no_clusters_per_step, clusters_per_sequence, K, b1, mu, sdw, sdc, sdcp, theta, margin, delay, period_effects, adjust_period, fit_cp, sig.level, REML, nAGQ, failure_handling}{Defaults used when corresponding columns are absent. If any scenario has
-\code{adjust_period = FALSE}, one warning is given for the whole grid.}
+\item{Tp, no_clusters_per_step, clusters_per_sequence, K, b1, mu, sdw, sdc, sdcp, rho, theta, margin, delay, period_effects, adjust_period, fit_cp, sig.level, REML, nAGQ, failure_handling}{Defaults used when corresponding columns are absent. If any scenario has
+`adjust_period = FALSE`, one warning is given for the whole grid. One
+engine is used for the whole grid; see the Backends section of
+[sw_ni_power()].}
 
-\item{parallel}{Logical; parallelize across rows of \code{params}.}
+\item{parallel}{Logical; parallelize across rows of `params` when using
+`backend = "lme4"`.}
 
-\item{ncores}{Number of workers.}
+\item{ncores}{Number of CPU workers when `backend = "lme4"`.}
 
-\item{return_details}{If \code{TRUE}, append Monte Carlo SE, failure information,
+\item{return_details}{If `TRUE`, append Monte Carlo SE, failure information,
 and design totals.}
+
+\item{cluster}{Optional existing cluster created by [parallel::makeCluster()].
+When supplied (with `backend = "auto"` or `"lme4"`), it takes precedence
+over `parallel` and `ncores`, and is not stopped by `sw_ni_grid()`.}
+
+\item{backend}{Simulation engine: `"auto"`, `"gpu"`, `"torch_cpu"`, or
+`"lme4"`.}
+
+\item{batch_size}{Optional positive integer number of replicates processed
+simultaneously per batch on `"gpu"` / `"torch_cpu"` backends.}
+
+\item{device}{Optional explicit PyTorch device string.}
 }
 \value{
 A data frame containing the input parameters plus estimated power.
 }
 \description{
-Runs \code{\link[=sw_ni_power]{sw_ni_power()}} over every row of \code{params}. Columns take precedence over
-scalar arguments. Advanced parameters such as \code{clusters_per_sequence}, \code{K},
-\code{delay}, and \code{period_effects} may be stored as list-columns.
+Runs [sw_ni_power()] over every row of `params`. Columns take precedence over
+scalar arguments. Advanced parameters such as `clusters_per_sequence`, `K`,
+`delay`, and `period_effects` may be stored as list-columns. When PyTorch GPU
+or batched CPU acceleration is active, scenarios execute in a shared PyTorch
+session while batching replicates within each scenario on the accelerator.
 }

@@ -33,7 +33,7 @@ test_that("grid builder works", {
   expect_true(all(g$adjust_period))
 })
 
-test_that("single-scenario continuous interface returns version 0.1.2 details", {
+test_that("single-scenario continuous interface returns detailed results", {
   skip_if_not_installed("lme4")
   x <- sw_ni_power(
     outcome = "continuous",
@@ -48,4 +48,36 @@ test_that("single-scenario continuous interface returns version 0.1.2 details", 
   expect_true(is.list(x))
   expect_true(all(c("power", "mcse", "n_failed", "design") %in% names(x)))
   expect_equal(x$design$total_observations, 4 * 6 * 20)
+})
+
+test_that("PSOCK worker counts stay below the connection-safe ceiling", {
+  expect_gte(swNIsim:::.default_ncores(), 1L)
+  expect_lte(swNIsim:::.default_ncores(), 64L)
+  expect_equal(swNIsim:::.safe_ncores(1000L, tasks = 2L, warn = FALSE), 2L)
+  expect_lte(
+    swNIsim:::.safe_ncores(1000L, tasks = 1000L, warn = FALSE),
+    64L
+  )
+})
+
+test_that("an externally supplied cluster is reused and remains open", {
+  skip_on_cran()
+  skip_if_not_installed("lme4")
+
+  cl <- parallel::makePSOCKcluster(2L)
+  on.exit(parallel::stopCluster(cl), add = TRUE)
+
+  x <- sw_ni_power(
+    outcome = "continuous",
+    seed = 2026,
+    trials = 2,
+    Tp = 4,
+    clusters_per_sequence = c(2, 2, 2),
+    K = 20,
+    cluster = cl,
+    return_details = TRUE
+  )
+
+  expect_true(is.list(x))
+  expect_length(parallel::clusterCall(cl, Sys.getpid), 2L)
 })

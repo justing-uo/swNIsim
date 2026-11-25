@@ -11,6 +11,7 @@ build_sw_ni_grid(
   K = 20,
   sdc = 1,
   sdcp = 0,
+  rho = 0,
   theta = 0,
   margin = NULL,
   sig.level = 0.025,
@@ -24,12 +25,13 @@ build_sw_ni_grid(
 )
 }
 \arguments{
-\item{outcome}{Either \code{"binary"} or \code{"continuous"}.}
+\item{outcome}{Either `"binary"` or `"continuous"`.}
 
 \item{Tp, no_clusters_per_step, K, sdc, theta, margin, sig.level}{Parameter values
 crossed into a grid.}
 
-\item{sdcp}{Cluster-by-period random-effect SD values; see \code{\link[=sw_ni_power]{sw_ni_power()}}.}
+\item{sdcp, rho}{Cluster-by-period random-effect SD and AR(1) autocorrelation
+values; see [sw_ni_power()].}
 
 \item{b1}{Binary baseline log-odds values.}
 
@@ -39,17 +41,17 @@ crossed into a grid.}
 
 \item{REML}{Continuous-outcome REML values.}
 
-\item{nAGQ}{Binary-outcome values of \code{nAGQ} passed to \code{\link[lme4:glmer]{lme4::glmer()}}; see
-\code{\link[=sw_ni_power]{sw_ni_power()}}.}
+\item{nAGQ}{Binary-outcome values of `nAGQ` passed to [lme4::glmer()]; see
+[sw_ni_power()].}
 
-\item{failure_handling}{Character values: \code{"nonrejection"}, \code{"exclude"}, or
-\code{"error"}.}
+\item{failure_handling}{Character values: `"nonrejection"`, `"exclude"`, or
+`"error"`.}
 }
 \value{
 A data frame with one row per scenario.
 }
 \description{
-Creates a conventional scalar parameter grid for \code{\link[=sw_ni_grid]{sw_ni_grid()}}. Advanced
-unequal sequence-size, unequal \code{K}, delay, or period-effect specifications can
-be supplied to \code{\link[=sw_ni_grid]{sw_ni_grid()}} through list-columns or as scalar defaults.
+Creates a conventional scalar parameter grid for [sw_ni_grid()]. Advanced
+unequal sequence-size, unequal `K`, delay, or period-effect specifications can
+be supplied to [sw_ni_grid()] through list-columns or as scalar defaults.
 }
