@@ -1,7 +1,7 @@
 Package: swNIsim
 Type: Package
 Title: Stepped-Wedge Non-Inferiority Simulation
-Version: 0.1.2
+Version: 1.2
 Authors@R: c(
     person(
       given = "Justin",
@@ -18,11 +18,15 @@ Authors@R: c(
 )
 Description: Simulates power for non-inferiority tests in repeated cross-sectional
     stepped-wedge cluster randomized trials with binary or continuous outcomes.
-    The package supports fixed categorical period adjustment, user-specified
+    The package supports exchangeable and nested exchangeable (cluster-by-period)
+    correlation structures, fixed categorical period adjustment, user-specified
     secular period effects, unequal numbers of clusters across sequences,
     unequal cluster-period sample sizes, parameter grids, reproducible optional
     parallelization, conservative handling of failed model fits, Monte Carlo
-    standard errors, optional Word export, and an optional Shiny interface.
+    standard errors, conversion of clinically specified margins to the model
+    scale, a search for the smallest cluster-period size or number of clusters
+    meeting a power target, optional Word export, and an optional Shiny
+    interface.
 License: MIT + file LICENSE
 Encoding: UTF-8
 RoxygenNote: 7.3.2

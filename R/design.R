@@ -1,7 +1,7 @@
 #' Build a stepped-wedge design object
 #'
 #' Builds the repeated cross-sectional cluster-by-period design used by the
-#' binary and continuous non-inferiority simulation engines. Version 0.1.2
+#' binary and continuous non-inferiority simulation engines. Version 1.2
 #' supports unequal numbers of clusters across crossover sequences.
 #'
 #' @param Tp Number of time periods. Must be an integer >= 2. The design has

@@ -178,3 +178,59 @@
     failure_handling = failure_handling
   )
 }
+
+.unadjusted_message <- function() {
+  paste(
+    "adjust_period = FALSE omits period effects from the analysis model.",
+    "In a stepped-wedge trial exposure is confounded with calendar time, so an",
+    "unadjusted analysis can attribute secular trends to the intervention and",
+    "bias the noninferiority test. Use it only to illustrate that consequence."
+  )
+}
+
+.warn_unadjusted <- function() {
+  cond <- structure(
+    class = c("swNIsim_unadjusted_warning", "warning", "condition"),
+    list(message = .unadjusted_message(), call = NULL)
+  )
+  warning(cond)
+}
+
+.muffle_unadjusted <- function(expr) {
+  withCallingHandlers(
+    expr,
+    swNIsim_unadjusted_warning = function(w) invokeRestart("muffleWarning")
+  )
+}
+
+.resolve_fit_cp <- function(fit_cp, outcome, sdcp) {
+  unset <- is.null(fit_cp) || (length(fit_cp) == 1L && is.na(fit_cp))
+  if (identical(outcome, "continuous")) {
+    if (!unset) {
+      stop(
+        "fit_cp applies to binary outcomes only. The continuous analysis of ",
+        "cluster-period means absorbs a cluster-by-period effect in its residual variance.",
+        call. = FALSE
+      )
+    }
+    return(FALSE)
+  }
+  if (unset) return(sdcp > 0)
+  if (!is.logical(fit_cp) || length(fit_cp) != 1L) {
+    stop("fit_cp must be NULL, TRUE or FALSE.", call. = FALSE)
+  }
+  fit_cp
+}
+
+.correlation_summary <- function(outcome, sdc, sdcp, sdw) {
+  s2 <- if (identical(outcome, "binary")) pi^2 / 3 else sdw^2
+  total <- sdc^2 + sdcp^2 + s2
+  cluster_var <- sdc^2 + sdcp^2
+  list(
+    scale = if (identical(outcome, "binary")) "latent logistic" else "outcome",
+    structure = if (sdcp > 0) "nested exchangeable" else "exchangeable",
+    within_period_icc = cluster_var / total,
+    between_period_icc = sdc^2 / total,
+    cluster_autocorrelation = if (cluster_var > 0) sdc^2 / cluster_var else NA_real_
+  )
+}

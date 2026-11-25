@@ -7,10 +7,13 @@
 #' @param outcome Either `"binary"` or `"continuous"`.
 #' @param Tp,no_clusters_per_step,K,sdc,theta,margin,sig.level Parameter values
 #'   crossed into a grid.
+#' @param sdcp Cluster-by-period random-effect SD values; see [sw_ni_power()].
 #' @param b1 Binary baseline log-odds values.
 #' @param mu,sdw Continuous-outcome parameter values.
 #' @param adjust_period Logical values indicating categorical period adjustment.
 #' @param REML Continuous-outcome REML values.
+#' @param nAGQ Binary-outcome values of `nAGQ` passed to [lme4::glmer()]; see
+#'   [sw_ni_power()].
 #' @param failure_handling Character values: `"nonrejection"`, `"exclude"`, or
 #'   `"error"`.
 #'
@@ -21,6 +24,7 @@ build_sw_ni_grid <- function(outcome = c("binary", "continuous"),
                              no_clusters_per_step = 4,
                              K = 20,
                              sdc = 1,
+                             sdcp = 0,
                              theta = 0,
                              margin = NULL,
                              sig.level = 0.025,
@@ -29,6 +33,7 @@ build_sw_ni_grid <- function(outcome = c("binary", "continuous"),
                              sdw = 2,
                              adjust_period = TRUE,
                              REML = TRUE,
+                             nAGQ = 0,
                              failure_handling = "nonrejection") {
   outcome <- match.arg(outcome)
   if (is.null(margin)) margin <- .default_margin(outcome)
@@ -38,6 +43,7 @@ build_sw_ni_grid <- function(outcome = c("binary", "continuous"),
     no_clusters_per_step = no_clusters_per_step,
     K = K,
     sdc = sdc,
+    sdcp = sdcp,
     theta = theta,
     margin = margin,
     sig.level = sig.level,
@@ -47,6 +53,7 @@ build_sw_ni_grid <- function(outcome = c("binary", "continuous"),
 
   if (identical(outcome, "binary")) {
     common$b1 <- b1
+    common$nAGQ <- nAGQ
   } else {
     common$mu <- mu
     common$sdw <- sdw
@@ -73,9 +80,9 @@ build_sw_ni_grid <- function(outcome = c("binary", "continuous"),
 #'   is present.
 #' @param seed Base seed; row `i` uses `seed + i - 1`.
 #' @param trials Number of simulated trials per scenario.
-#' @param Tp,no_clusters_per_step,clusters_per_sequence,K,b1,mu,sdw,sdc,theta,
-#' margin,delay,period_effects,adjust_period,sig.level,REML,failure_handling
-#'   Defaults used when corresponding columns are absent.
+#' @param Tp,no_clusters_per_step,clusters_per_sequence,K,b1,mu,sdw,sdc,sdcp,theta,margin,delay,period_effects,adjust_period,fit_cp,sig.level,REML,nAGQ,failure_handling
+#'   Defaults used when corresponding columns are absent. If any scenario has
+#'   `adjust_period = FALSE`, one warning is given for the whole grid.
 #' @param parallel Logical; parallelize across rows of `params`.
 #' @param ncores Number of workers.
 #' @param return_details If `TRUE`, append Monte Carlo SE, failure information,
@@ -95,13 +102,16 @@ sw_ni_grid <- function(params,
                        mu = 5,
                        sdw = 2,
                        sdc = 1,
+                       sdcp = 0,
                        theta = 0,
                        margin = NULL,
                        delay = NULL,
                        period_effects = NULL,
                        adjust_period = TRUE,
+                       fit_cp = NULL,
                        sig.level = 0.025,
                        REML = TRUE,
+                       nAGQ = 0,
                        failure_handling = "nonrejection",
                        parallel = TRUE,
                        ncores = .default_ncores(),
@@ -125,8 +135,15 @@ sw_ni_grid <- function(params,
   }
   if (is.null(margin)) margin <- .default_margin(outcome)
 
+  unadjusted <- !vapply(
+    seq_len(nrow(params)),
+    function(i) isTRUE(.param_value(params, "adjust_period", i, adjust_period)),
+    logical(1L)
+  )
+  if (any(unadjusted)) .warn_unadjusted()
+
   scenario_fun <- function(i) {
-    out <- sw_ni_power(
+    out <- .muffle_unadjusted(sw_ni_power(
       outcome = as.character(params$outcome[i]),
       seed = seed + i - 1L,
       trials = trials,
@@ -138,17 +155,20 @@ sw_ni_grid <- function(params,
       mu = .param_value(params, "mu", i, mu),
       sdw = .param_value(params, "sdw", i, sdw),
       sdc = .param_value(params, "sdc", i, sdc),
+      sdcp = .param_value(params, "sdcp", i, sdcp),
       theta = .param_value(params, "theta", i, theta),
       margin = .param_value(params, "margin", i, margin),
       delay = .param_value(params, "delay", i, delay),
       period_effects = .param_value(params, "period_effects", i, period_effects),
       adjust_period = .param_value(params, "adjust_period", i, adjust_period),
+      fit_cp = .param_value(params, "fit_cp", i, fit_cp),
       sig.level = .param_value(params, "sig.level", i, sig.level),
       REML = .param_value(params, "REML", i, REML),
+      nAGQ = .param_value(params, "nAGQ", i, nAGQ),
       failure_handling = .param_value(params, "failure_handling", i, failure_handling),
       parallel = FALSE,
       return_details = TRUE
-    )
+    ))
 
     c(
       power = out$power,

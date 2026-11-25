@@ -2,7 +2,7 @@
 install.packages("lme4")
 
 # Adjust this path to where the tarball was downloaded.
-pkg_file <- "~/Downloads/swNIsim_0.1.2.tar.gz"
+pkg_file <- "~/Downloads/swNIsim_1.2.tar.gz"
 install.packages(pkg_file, repos = NULL, type = "source")
 
 library(swNIsim)

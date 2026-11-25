@@ -26,12 +26,23 @@ run_sw_ni_app <- function() {
         shiny::checkboxInput("adjust_period", "Adjust for categorical period", TRUE),
         shiny::textInput("delay", "Post-crossover exposure values (optional)", ""),
         shiny::numericInput("sdc", "Cluster SD (sdc)", 1, min = 0, step = 0.1),
+        shiny::numericInput("sdcp", "Cluster-by-period SD (sdcp; 0 = exchangeable)", 0, min = 0, step = 0.1),
         shiny::numericInput("theta", "True treatment effect (theta)", 0, step = 0.01),
         shiny::numericInput("margin", "Non-inferiority margin", 0.25, min = 0, step = 0.01),
         shiny::numericInput("sig_level", "One-sided alpha", 0.025, min = 0, max = 1, step = 0.001),
         shiny::conditionalPanel(
           "input.outcome == 'binary'",
-          shiny::numericInput("b1", "Baseline log-odds (b1)", 0.5, step = 0.1)
+          shiny::numericInput("b1", "Baseline log-odds (b1)", 0.5, step = 0.1),
+          shiny::selectInput(
+            "fit_cp",
+            "Cluster-by-period effect in the analysis",
+            c("Auto (when sdcp > 0)" = "auto", "Include" = "yes", "Omit" = "no")
+          ),
+          shiny::selectInput(
+            "nAGQ",
+            "glmer nAGQ",
+            c("0 (fast; published default)" = "0", "1 (Laplace)" = "1")
+          )
         ),
         shiny::conditionalPanel(
           "input.outcome == 'continuous'",
@@ -73,8 +84,11 @@ run_sw_ni_app <- function() {
           period_effects <- .parse_numeric_text(input$period_effects, "period_effects")
           delay <- .parse_numeric_text(input$delay, "delay")
 
+          if (!isTRUE(input$adjust_period)) {
+            cat("Warning:", .unadjusted_message(), "\n\n")
+          }
           shiny::withProgress(message = "Running simulations...", value = 0.5, {
-            sw_ni_power(
+            .muffle_unadjusted(sw_ni_power(
               outcome = input$outcome,
               seed = input$seed,
               trials = input$trials,
@@ -86,6 +100,12 @@ run_sw_ni_app <- function() {
               mu = if (identical(input$outcome, "continuous")) input$mu else 5,
               sdw = if (identical(input$outcome, "continuous")) input$sdw else 2,
               sdc = input$sdc,
+              sdcp = input$sdcp,
+              fit_cp = if (identical(input$outcome, "binary")) {
+                switch(input$fit_cp, yes = TRUE, no = FALSE, NULL)
+              } else {
+                NULL
+              },
               theta = input$theta,
               margin = input$margin,
               delay = delay,
@@ -93,11 +113,12 @@ run_sw_ni_app <- function() {
               adjust_period = input$adjust_period,
               sig.level = input$sig_level,
               REML = if (identical(input$outcome, "continuous")) input$REML else TRUE,
+              nAGQ = if (identical(input$outcome, "binary")) as.integer(input$nAGQ) else 0L,
               failure_handling = input$failure_handling,
               parallel = input$parallel,
               ncores = input$ncores,
               return_details = TRUE
-            )
+            ))
           })
         }, error = function(e) {
           cat("Error:", conditionMessage(e), "\n")
