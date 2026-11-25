@@ -1,0 +1,50 @@
+Package: swNIsim
+Type: Package
+Title: Stepped-Wedge Non-Inferiority Simulation
+Version: 1.3
+Authors@R: c(
+    person(
+      given = "Justin",
+      family = "Guo",
+      role = c("aut", "cre"),
+      email = "justinyguo@gmail.com"
+    ),
+    person(
+      given = "Chih-Yuan",
+      family = "Hsu",
+      role = "aut",
+      email = "chih-yuan.hsu@vumc.org"
+    )
+  )
+Description: Simulates power for non-inferiority tests in repeated cross-sectional
+    stepped-wedge cluster randomized trials with binary or continuous outcomes.
+    The package supports exchangeable, nested exchangeable and AR(1)
+    cluster-by-period correlation structures, a reference 'lme4' engine and
+    batched PyTorch GPU and CPU acceleration with fused CUDA kernels (including
+    zero-setup execution on Google Colab via 'reticulate' or a Python CLI),
+    fixed categorical period adjustment, user-specified secular period effects,
+    unequal numbers of clusters across sequences, unequal cluster-period sample
+    sizes, parameter grids, reproducible optional parallelization, conservative
+    handling of failed model fits, Monte Carlo standard errors, conversion of
+    clinically specified margins to the model scale, a search for the smallest
+    cluster-period size or number of clusters meeting a power target, optional
+    Word export, and an optional Shiny interface.
+License: MIT + file LICENSE
+Encoding: UTF-8
+RoxygenNote: 7.3.2
+Depends: R (>= 4.1.0)
+Imports:
+    parallel,
+    stats
+Suggests:
+    lme4,
+    reticulate,
+    jsonlite,
+    shiny,
+    officer,
+    flextable,
+    testthat (>= 3.0.0)
+SystemRequirements: Optional Python (>= 3.9) with 'torch' for
+    GPU/batched acceleration (pre-installed in Google Colab).
+Config/testthat/edition: 3
+
