@@ -98,35 +98,33 @@ Other methods are `"preserve_benefit"` (keep a fraction `f2` of the control's be
 ## Nested exchangeable correlation
 
 ```r
-# Within-period ICC 0.20 and between-period ICC 0.10 (cluster autocorrelation 0.5)
+# Continuous
 ans <- sw_ni_power(
   outcome = "continuous", trials = 10000, Tp = 7, no_clusters_per_step = 10, K = 20,
-  mu = 5, sdw = 2, sdc = sqrt(0.5), sdcp = sqrt(0.5), theta = 0, margin = 0.15,
+  mu = 5, sdw = 2, sdc = 1, sdcp = 0, theta = 0, margin = 0.15,
   return_details = TRUE
 )
 ans$power
-ans$correlation
 
-# Binary: Type I error when the analysis omits the cluster-by-period effect
+# Binary
 sw_ni_power(
-  outcome = "binary", trials = 10000, Tp = 5, no_clusters_per_step = 4, K = 30,
-  b1 = 0.5, sdc = 0.5, sdcp = 0.5, theta = -0.18, margin = 0.18, fit_cp = FALSE
+  outcome = "binary", trials = 10000, Tp = 5, no_clusters_per_step = 10, K = 30,
+  b1 = 0.5, sdc = 1, sdcp = 0, theta = 0, margin = 0.18,
 )
+ans$power
 ```
-
-The within-period ICC is `(sdc^2 + sdcp^2) / (sdc^2 + sdcp^2 + s2)` and the between-period ICC is `sdc^2 / (sdc^2 + sdcp^2 + s2)`, where `s2` is `sdw^2` for continuous outcomes and `pi^2 / 3` on the latent logistic scale for binary outcomes.
 
 ## AR(1) cluster-by-period effects
 
-With `rho != 0`, the cluster-by-period effects follow a stationary AR(1) process, so the correlation between two periods in the same cluster decays with the distance between them. These designs run on PyTorch, which fits the AR(1) model (`glmmTMB`-style; Laplace approximation for binary outcomes). Cluster-period sizes must be equal.
+With `sdc = 0` and `rho != 0`, the cluster-by-period effects follow a stationary AR(1) process, so the correlation between two periods in the same cluster decays with the distance between them. These designs run on PyTorch, which fits the AR(1) model (`glmmTMB`-style; Laplace approximation for binary outcomes). Cluster-period sizes must be equal.
 
 ```r
 ans <- sw_ni_power(
   outcome = "continuous", trials = 10000, Tp = 7, no_clusters_per_step = 4, K = 20,
-  mu = 5, sdw = 2, sdc = 0.7, sdcp = 0.7, rho = 0.6, theta = 0, margin = 0.15,
+  mu = 5, sdw = 2, sdc = 0, sdcp = 1, rho = 0.6, theta = 0, margin = 0.15,
   backend = "auto", return_details = TRUE
 )
-ans$correlation  # adjacent-period values; at lag d, rho^d replaces rho
+ans$power
 ```
 
 ## Finding the smallest design that meets a power target
