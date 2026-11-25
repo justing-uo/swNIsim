@@ -96,7 +96,7 @@ build_margin("continuous", method = "preserve_control", mu = 21, f1 = 0.80)$marg
 Other methods are `"preserve_benefit"` (keep a fraction `f2` of the control's benefit over a benchmark `p0` or `mu0`), `"threshold"` (give `p_min` or `mu_min` directly) and `"direct"` (give `margin` on the model scale).
 
 ## Nested exchangeable correlation
-
+Specify `sdcp = 0`.
 ```r
 # Continuous
 ans <- sw_ni_power(
