@@ -31,7 +31,7 @@ The package supports exchangeable, nested exchangeable and AR(1) cluster-by-peri
 ```r
 library(devtools)
 install_github("justing-uo/swNIsim") # Or install.packages("swNIsim_1.3.tar.gz", repos = NULL, type = "source")
-library(swNIsim)
+library(reticulate)
 ```
 
 For GPU or batched CPU acceleration, install Python (>= 3.9) with `torch`; `reticulate` is optional and makes the calls in-process. Set `Sys.setenv(SWNISIM_PYTHON = "/path/to/python3")` to pick a specific interpreter. Check what was found with:
