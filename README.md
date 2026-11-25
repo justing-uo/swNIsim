@@ -29,8 +29,8 @@ The package supports exchangeable, nested exchangeable and AR(1) cluster-by-peri
 ## Installation
 
 ```r
-install.packages("lme4")          # CPU reference engine
-install.packages("swNIsim_1.3.tar.gz", repos = NULL, type = "source")
+library(devtools)
+install_github("justing-uo/swNIsim")
 library(swNIsim)
 ```
 
