@@ -127,7 +127,7 @@ ans <- sw_ni_power(
 ans$power
 ```
 
-## Finding the smallest cluster size that meets a power target
+## Finding the smallest cluster-period size that meets a power target
 
 ```r
 res <- sw_ni_sample_size(
