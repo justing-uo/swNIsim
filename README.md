@@ -13,7 +13,7 @@ Version 1.3 combines the 1.2 line with the 0.3.0 GPU edition, which was develope
 
 ## What changed in 1.2
 
-- Nested exchangeable correlation: `sdcp` adds a cluster-by-period random effect, so the within-period and between-period ICCs can differ.
+- Nested exchangeable correlation: `sdcp` adds a cluster-by-period random effect.
 - For binary outcomes, `fit_cp` controls whether the analysis includes the cluster-by-period effect, so correctly specified and misspecified analyses can both be evaluated.
 - With `sdcp = 0` (the default), results are identical to 1.1 and 1.0 for the same seed.
 
