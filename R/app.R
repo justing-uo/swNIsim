@@ -16,6 +16,16 @@ run_sw_ni_app <- function() {
     shiny::sidebarLayout(
       shiny::sidebarPanel(
         shiny::selectInput("outcome", "Outcome type", c("binary", "continuous")),
+        shiny::selectInput(
+          "backend",
+          "Simulation backend",
+          c(
+            "Auto (GPU if available)" = "auto",
+            "GPU (PyTorch CUDA/MPS)" = "gpu",
+            "CPU (Batched PyTorch)" = "torch_cpu",
+            "CPU (lme4 reference)" = "lme4"
+          )
+        ),
         shiny::numericInput("seed", "Seed", 2026, min = 1, step = 1),
         shiny::numericInput("trials", "Simulated trials", 1000, min = 1, step = 100),
         shiny::numericInput("Tp", "Time periods (Tp)", 5, min = 2, step = 1),
@@ -44,8 +54,11 @@ run_sw_ni_app <- function() {
           "Failed-fit handling",
           c("Count as non-rejection" = "nonrejection", "Exclude" = "exclude", "Stop" = "error")
         ),
-        shiny::checkboxInput("parallel", "Parallelize replicates", FALSE),
-        shiny::numericInput("ncores", "Cores", .default_ncores(), min = 1, step = 1),
+        shiny::conditionalPanel(
+          "input.backend == 'lme4'",
+          shiny::checkboxInput("parallel", "Parallelize CPU replicates", FALSE),
+          shiny::numericInput("ncores", "CPU Cores", .default_ncores(), min = 1, step = 1)
+        ),
         shiny::actionButton("run", "Run simulation")
       ),
       shiny::mainPanel(
@@ -94,9 +107,10 @@ run_sw_ni_app <- function() {
               sig.level = input$sig_level,
               REML = if (identical(input$outcome, "continuous")) input$REML else TRUE,
               failure_handling = input$failure_handling,
-              parallel = input$parallel,
+              parallel = isTRUE(input$parallel),
               ncores = input$ncores,
-              return_details = TRUE
+              return_details = TRUE,
+              backend = input$backend
             )
           })
         }, error = function(e) {

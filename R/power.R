@@ -1,9 +1,11 @@
 #' Estimate power for a stepped-wedge non-inferiority design
 #'
 #' Main user-facing function for binary and continuous repeated
-#' cross-sectional stepped-wedge designs. Version 0.1.2 supports fixed
-#' categorical period adjustment, user-specified secular period effects,
-#' unequal sequence sizes, and unequal cluster-period sample sizes.
+#' cross-sectional stepped-wedge designs. Version 0.2.0 adds batched PyTorch
+#' GPU/CPU acceleration (ideal for Google Colab) alongside the reference `lme4`
+#' engine, supporting fixed categorical period adjustment, user-specified
+#' secular period effects, unequal sequence sizes, and unequal cluster-period
+#' sample sizes.
 #'
 #' @param outcome Either `"binary"` or `"continuous"`.
 #' @param seed Random-number seed.
@@ -21,6 +23,11 @@
 #' @param sdw Continuous-outcome within-cluster individual-level standard
 #'   deviation. Cluster-period means are generated with SD `sdw / sqrt(K_ij)`.
 #' @param sdc Cluster-level random-intercept standard deviation.
+#' @param sdcp Stationary AR(1) cluster-by-period random-effect marginal
+#'   standard deviation (default `0`, i.e., shared cluster random intercept
+#'   only). Positive values require a PyTorch backend (`"gpu"` or `"torch_cpu"`).
+#' @param rho Autocorrelation parameter in `(-1, 1)` for the stationary AR(1)
+#'   cluster-by-period random effect when `sdcp > 0`.
 #' @param theta True treatment effect on the fitted-model scale.
 #' @param margin Non-inferiority margin on the fitted-model scale. If `NULL`,
 #'   defaults to 0.25 for binary outcomes and 0.15 for continuous outcomes.
@@ -36,11 +43,25 @@
 #' @param failure_handling Handling of failed model fits: `"nonrejection"`
 #'   counts failures as non-rejections (default), `"exclude"` omits them from
 #'   the power denominator, and `"error"` stops if any fit fails.
-#' @param parallel Logical; parallelize simulation replicates within the
-#'   scenario.
-#' @param ncores Number of workers when `parallel = TRUE`.
+#' @param parallel Logical; parallelize simulation replicates across CPU workers
+#'   when using `backend = "lme4"`.
+#' @param ncores Number of CPU workers when `parallel = TRUE` and
+#'   `backend = "lme4"`.
 #' @param return_details If `TRUE`, return power, Monte Carlo SE, fit-failure
-#'   information, design totals, and normalized parameters.
+#'   information, backend/device metadata, design totals, and normalized
+#'   parameters.
+#' @param cluster Optional existing cluster created by [parallel::makeCluster()].
+#'   When supplied (with `backend = "auto"` or `"lme4"`), it takes precedence
+#'   over `parallel` and `ncores`, and is not stopped by `sw_ni_power()`.
+#' @param backend Simulation engine: `"auto"` (default; uses PyTorch GPU if
+#'   available, else batched PyTorch CPU if available, else `"lme4"`), `"gpu"`
+#'   (requires CUDA/MPS GPU via PyTorch), `"torch_cpu"` (batched PyTorch on
+#'   CPU), or `"lme4"` (reference per-trial CPU fits via `lme4`).
+#' @param batch_size Optional positive integer number of replicates processed
+#'   simultaneously per batch on `"gpu"` / `"torch_cpu"` backends. Defaults to
+#'   an automatic memory-safe batch size (`NULL`).
+#' @param device Optional explicit PyTorch device string (for example `"cuda"`,
+#'   `"cuda:0"`, `"mps"`, or `"cpu"`).
 #'
 #' @return Numeric power when `return_details = FALSE`; otherwise a list.
 #' @export
@@ -65,19 +86,36 @@ sw_ni_power <- function(outcome = c("binary", "continuous"),
                         failure_handling = c("nonrejection", "exclude", "error"),
                         parallel = FALSE,
                         ncores = .default_ncores(),
-                        return_details = FALSE) {
+                        return_details = FALSE,
+                        cluster = NULL,
+                        backend = c("auto", "gpu", "torch_cpu", "lme4"),
+                        batch_size = NULL,
+                        device = NULL,
+                        sdcp = 0,
+                        rho = 0) {
   outcome <- match.arg(outcome)
   failure_handling <- match.arg(failure_handling)
+  backend <- match.arg(backend)
   if (is.null(margin)) margin <- .default_margin(outcome)
 
   .check_scalar_numeric(seed, "seed", integer = TRUE)
   .check_scalar_numeric(trials, "trials", lower = 1, integer = TRUE)
   .check_scalar_numeric(Tp, "Tp", lower = 2, integer = TRUE)
   .check_scalar_numeric(sdc, "sdc", lower = 0)
+  .check_scalar_numeric(sdcp, "sdcp", lower = 0)
+  .check_scalar_numeric(rho, "rho", lower = -0.9999, upper = 0.9999)
   .check_scalar_numeric(theta, "theta")
   .check_scalar_numeric(margin, "margin", lower = 0)
   .check_scalar_numeric(sig.level, "sig.level", lower = 0, upper = 1)
   .check_scalar_numeric(ncores, "ncores", lower = 1, integer = TRUE)
+  .check_scalar_numeric(batch_size, "batch_size", lower = 1, integer = TRUE, allow_null = TRUE)
+  if (!is.logical(parallel) || length(parallel) != 1L || is.na(parallel)) {
+    stop("parallel must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.logical(return_details) || length(return_details) != 1L || is.na(return_details)) {
+    stop("return_details must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.null(cluster)) .validate_cluster(cluster)
   if (!is.logical(adjust_period) || length(adjust_period) != 1L || is.na(adjust_period)) {
     stop("adjust_period must be TRUE or FALSE.", call. = FALSE)
   }
@@ -106,30 +144,24 @@ sw_ni_power <- function(outcome = c("binary", "continuous"),
   )
   K_vec <- .normalize_K(K, design_obj)
   period_effects <- .normalize_period_effects(period_effects, design_obj$Tp)
+  trials <- as.integer(trials)
 
-  if (identical(outcome, "binary")) {
-    control <- lme4::glmerControl(check.conv.singular = "ignore")
-    sim_fun <- .sw_ni_simulate_binary_once
-    sim_args <- list(
+  resolved <- .resolve_execution_backend(
+    backend = backend,
+    device = device,
+    cluster = cluster
+  )
+
+  if (identical(resolved$engine, "torch")) {
+    payload <- .build_torch_scenario_payload(
+      outcome = outcome,
+      trials = trials,
+      seed = seed,
       design_obj = design_obj,
       K_vec = K_vec,
       period_effects = period_effects,
       adjust_period = adjust_period,
       b1 = b1,
-      sdc = sdc,
-      theta = theta,
-      margin = margin,
-      sig.level = sig.level,
-      control = control
-    )
-  } else {
-    control <- lme4::lmerControl(check.conv.singular = "ignore")
-    sim_fun <- .sw_ni_simulate_continuous_once
-    sim_args <- list(
-      design_obj = design_obj,
-      K_vec = K_vec,
-      period_effects = period_effects,
-      adjust_period = adjust_period,
       mu = mu,
       sdw = sdw,
       sdc = sdc,
@@ -137,51 +169,129 @@ sw_ni_power <- function(outcome = c("binary", "continuous"),
       margin = margin,
       sig.level = sig.level,
       REML = REML,
-      control = control
+      batch_size = batch_size,
+      device = resolved$device,
+      sdcp = sdcp,
+      rho = rho
     )
-  }
-
-  trials <- as.integer(trials)
-  one_run <- function(i, simulation_function, arguments) {
-    do.call(simulation_function, arguments)
-  }
-
-  if (!parallel || ncores <= 1L) {
-    set.seed(seed)
-    results <- vapply(
-      seq_len(trials),
-      one_run,
-      integer(1L),
-      simulation_function = sim_fun,
-      arguments = sim_args
+    torch_res <- .run_power_torch(payload, resolved$probe)
+    summary <- .compute_power_summary_from_counts(
+      n_rejections = torch_res$n_rejections,
+      n_failed = torch_res$n_failed,
+      trials = trials,
+      failure_handling = failure_handling
     )
+    backend_used <- resolved$mode
+    device_used <- as.character(torch_res$device)
   } else {
-    ncores <- min(as.integer(ncores), trials)
-    cl <- parallel::makeCluster(ncores)
-    on.exit(parallel::stopCluster(cl), add = TRUE)
-    parallel::clusterSetRNGStream(cl, iseed = seed)
-    results <- unlist(
-      parallel::parLapplyLB(
-        cl,
+    if (sdcp > 0) {
+      stop(
+        "AR(1) cluster-period random effects (sdcp > 0) require the PyTorch backend ('gpu' or 'torch_cpu').",
+        call. = FALSE
+      )
+    }
+    if (identical(outcome, "binary")) {
+      control <- lme4::glmerControl(check.conv.singular = "ignore")
+      sim_fun <- .sw_ni_simulate_binary_once
+      sim_args <- list(
+        design_obj = design_obj,
+        K_vec = K_vec,
+        period_effects = period_effects,
+        adjust_period = adjust_period,
+        b1 = b1,
+        sdc = sdc,
+        theta = theta,
+        margin = margin,
+        sig.level = sig.level,
+        control = control
+      )
+    } else {
+      control <- lme4::lmerControl(check.conv.singular = "ignore")
+      sim_fun <- .sw_ni_simulate_continuous_once
+      sim_args <- list(
+        design_obj = design_obj,
+        K_vec = K_vec,
+        period_effects = period_effects,
+        adjust_period = adjust_period,
+        mu = mu,
+        sdw = sdw,
+        sdc = sdc,
+        theta = theta,
+        margin = margin,
+        sig.level = sig.level,
+        REML = REML,
+        control = control
+      )
+    }
+
+    one_run <- function(i, simulation_function, arguments) {
+      do.call(simulation_function, arguments)
+    }
+
+    workers <- if (is.null(cluster) && isTRUE(parallel) && ncores > 1L) {
+      .safe_ncores(ncores, tasks = trials)
+    } else if (is.null(cluster)) {
+      1L
+    } else {
+      length(cluster)
+    }
+
+    if (is.null(cluster) && workers <= 1L) {
+      set.seed(seed)
+      results <- vapply(
         seq_len(trials),
         one_run,
+        integer(1L),
         simulation_function = sim_fun,
         arguments = sim_args
-      ),
-      use.names = FALSE
-    )
-  }
+      )
+    } else {
+      if (is.null(cluster)) {
+        cl <- tryCatch(
+          parallel::makePSOCKcluster(workers),
+          error = function(e) {
+            stop(
+              "Could not start the PSOCK cluster with ", workers,
+              " workers. Try a smaller ncores value. Original error: ",
+              conditionMessage(e),
+              call. = FALSE
+            )
+          }
+        )
+        on.exit(.stop_cluster(cl), add = TRUE)
+      } else {
+        cl <- cluster
+      }
+      parallel::clusterSetRNGStream(cl, iseed = seed)
+      results <- unlist(
+        parallel::parLapplyLB(
+          cl,
+          seq_len(trials),
+          one_run,
+          simulation_function = sim_fun,
+          arguments = sim_args
+        ),
+        use.names = FALSE
+      )
+    }
 
-  summary <- .compute_power_summary(
-    results = results,
-    trials = trials,
-    failure_handling = failure_handling
-  )
+    summary <- .compute_power_summary(
+      results = results,
+      trials = trials,
+      failure_handling = failure_handling
+    )
+    backend_used <- "lme4"
+    device_used <- "cpu"
+  }
 
   if (!return_details) return(summary$power)
 
   c(
-    list(outcome = outcome),
+    list(
+      outcome = outcome,
+      backend = backend_used,
+      device = device_used
+    ),
     summary,
     list(
       design = list(
