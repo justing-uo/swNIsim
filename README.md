@@ -121,7 +121,7 @@ With `sdc = 0` and `rho != 0`, the cluster-by-period effects follow a stationary
 ```r
 ans <- sw_ni_power(
   outcome = "continuous", trials = 10000, Tp = 7, no_clusters_per_step = 4, K = 50,
-  mu = 5, sdw = 2, sdc = 0, sdcp = 0.5, rho = 0.5, theta = 0, margin = 0.30,
+  mu = 5, sdw = 2, sdc = 0, sdcp = 0.5, rho = 0.6, theta = 0, margin = 0.30,
   backend = "auto", return_details = TRUE
 )
 ans$power
