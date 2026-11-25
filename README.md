@@ -30,7 +30,7 @@ The package supports exchangeable, nested exchangeable and AR(1) cluster-by-peri
 
 ```r
 library(devtools)
-install_github("justing-uo/swNIsim")
+install_github("justing-uo/swNIsim") # Or install.packages("swNIsim_1.3.tar.gz", repos = NULL, type = "source")
 library(swNIsim)
 ```
 
@@ -64,7 +64,6 @@ The engines fit the same models but draw random numbers differently, so the same
 Choose `Runtime -> Change runtime type -> R` and a GPU (e.g. T4). Upload the tarball to the session's files pane, then run:
 
 ```r
-install.packages("swNIsim_1.3.tar.gz", repos = NULL, type = "source")
 library(swNIsim)
 sw_ni_gpu_status()
 
